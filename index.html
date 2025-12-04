@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vocly Client</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.min.js"></script>
+
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #121212;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        background-color: #272727;
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        max-width: 600px;
+        width: 100%;
+      }
+
+      h1 {
+        text-align: center;
+        margin-bottom: 20px;
+        color: #4caf50;
+      }
+
+      .client-info {
+        background-color: #1a1a1a;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+        color: #888;
+      }
+
+      .screen {
+        display: none;
+      }
+      .screen.active {
+        display: block;
+      }
+
+      button {
+        font-size: 1.1rem;
+        padding: 12px 20px;
+        margin: 5px;
+        border-radius: 5px;
+        border: none;
+        background-color: #4caf50;
+        color: white;
+        cursor: pointer;
+        width: 100%;
+      }
+
+      button:hover {
+        background-color: #45a049;
+      }
+      button:disabled {
+        background-color: #666;
+        cursor: not-allowed;
+      }
+
+      input {
+        font-size: 1.1rem;
+        padding: 12px;
+        margin: 5px 0;
+        border-radius: 5px;
+        border: 2px solid #555;
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+        width: 100%;
+      }
+
+      .room-code {
+        font-size: 2rem;
+        color: #ffeb3b;
+        text-align: center;
+        margin: 20px 0;
+        font-weight: bold;
+        letter-spacing: 3px;
+      }
+
+      .status-msg {
+        text-align: center;
+        padding: 15px;
+        margin: 15px 0;
+        background-color: #1a1a1a;
+        border-radius: 5px;
+        border-left: 4px solid #4caf50;
+      }
+
+      .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin: 15px 0;
+        padding: 10px;
+        background-color: #1a1a1a;
+        border-radius: 5px;
+      }
+
+      .info-item {
+        text-align: center;
+      }
+      .info-label {
+        font-size: 0.9rem;
+        color: #888;
+      }
+      .info-value {
+        font-size: 1.3rem;
+        color: #4caf50;
+        font-weight: bold;
+      }
+
+      #game-grid {
+        margin: 20px 0;
+      }
+
+      .grid-row {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .grid-cell {
+        width: 60px;
+        height: 60px;
+        border: 2px solid #555;
+        border-radius: 3px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 2rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        background-color: #272727;
+      }
+
+      .grid-cell.flip {
+        animation: flipCell 0.6s ease-in-out;
+      }
+
+      @keyframes flipCell {
+        0% {
+          transform: rotateX(0deg);
+        }
+        50% {
+          transform: rotateX(90deg);
+        }
+        100% {
+          transform: rotateX(0deg);
+        }
+      }
+
+      .cell-correct {
+        background-color: #4caf50;
+        border-color: #4caf50;
+        color: white;
+      }
+
+      .cell-present {
+        background-color: #ffeb3b;
+        border-color: #ffeb3b;
+        color: #272727;
+      }
+
+      .cell-absent {
+        background-color: #616161;
+        border-color: #616161;
+        color: #e0e0e0;
+      }
+
+      .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+
+      .modal.active {
+        display: flex;
+        animation: fadeIn 0.3s ease;
+      }
+
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+
+      .modal-content {
+        background-color: #272727;
+        padding: 40px;
+        border-radius: 10px;
+        text-align: center;
+        animation: modalPop 0.4s ease;
+      }
+
+      @keyframes modalPop {
+        0% {
+          transform: scale(0.7);
+          opacity: 0;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+
+      hr {
+        border: none;
+        border-top: 1px solid #444;
+        margin: 20px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- LOBBY SCREEN -->
+    <div id="lobby-screen" class="container screen active">
+      <h1>🎮 Vocly Client</h1>
+
+      <div class="client-info">
+        <div>Client ID: <span id="client-id-display">Connecting...</span></div>
+        <div>Server: <span id="server-status">🔴 Disconnected</span></div>
+      </div>
+
+      <button id="create-room-btn">Create New Room</button>
+
+      <hr />
+
+      <h3>Join Existing Room</h3>
+      <input
+        type="text"
+        id="room-code-input"
+        placeholder="Enter 5-digit code..."
+        maxlength="5"
+      />
+      <button id="join-room-btn">Join Room</button>
+    </div>
+
+    <!-- WAITING ROOM SCREEN -->
+    <div id="waiting-screen" class="container screen">
+      <h1>🎮 Vocly</h1>
+
+      <div class="room-code" id="display-room-code">XXXXX</div>
+
+      <div class="status-msg">
+        <p id="waiting-message">Waiting for second player...</p>
+      </div>
+
+      <button id="start-game-btn" style="display: none">START GAME</button>
+      <button onclick="window.location.reload()">Leave Room</button>
+    </div>
+
+    <!-- GAME SCREEN -->
+    <div id="game-screen" class="container screen">
+      <h1>🎮 Vocly</h1>
+
+      <div class="info-row">
+        <div class="info-item">
+          <div class="info-label">Time Left</div>
+          <div class="info-value" id="timer-display">3:00</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Guesses</div>
+          <div class="info-value" id="guess-counter">0/6</div>
+        </div>
+        <div class="info-item">
+          <div class="info-label">Opponent</div>
+          <div class="info-value" id="opponent-counter">0/6</div>
+        </div>
+      </div>
+
+      <form id="guess-form">
+        <input
+          type="text"
+          id="guess-input"
+          placeholder="Enter 5-letter word..."
+          maxlength="5"
+          autocomplete="off"
+        />
+        <button type="submit">Submit Guess</button>
+      </form>
+
+      <div id="game-grid"></div>
+
+      <div id="waiting-opponent" style="display: none">
+        <div class="status-msg">
+          <p id="finish-message">Waiting for opponent...</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- RESULT SCREEN -->
+    <div id="result-screen" class="container screen">
+      <h1>Game Over</h1>
+
+      <div class="status-msg">
+        <h2 id="result-message"></h2>
+        <p id="result-details"></p>
+      </div>
+
+      <button id="rematch-btn">Rematch</button>
+      <button onclick="window.location.reload()">New Room</button>
+    </div>
+
+    <!-- MODAL -->
+    <div id="modal" class="modal">
+      <div class="modal-content">
+        <h2 id="modal-title"></h2>
+        <p id="modal-message"></p>
+      </div>
+    </div>
+
+    <script>
+      // Connect ke CLIENT app (bukan server langsung)
+      const socket = io();
+
+      let gameActive = false;
+      let currentRow = 0;
+      let maxGuesses = 6;
+      let wordLength = 5;
+      let timerInterval = null;
+      let isFinished = false;
+      let clientId = null;
+
+      const screens = {
+        lobby: document.getElementById("lobby-screen"),
+        waiting: document.getElementById("waiting-screen"),
+        game: document.getElementById("game-screen"),
+        result: document.getElementById("result-screen"),
+      };
+
+      const elements = {
+        clientIdDisplay: document.getElementById("client-id-display"),
+        serverStatus: document.getElementById("server-status"),
+        createRoomBtn: document.getElementById("create-room-btn"),
+        joinRoomBtn: document.getElementById("join-room-btn"),
+        roomCodeInput: document.getElementById("room-code-input"),
+        displayRoomCode: document.getElementById("display-room-code"),
+        waitingMessage: document.getElementById("waiting-message"),
+        startGameBtn: document.getElementById("start-game-btn"),
+        timerDisplay: document.getElementById("timer-display"),
+        guessCounter: document.getElementById("guess-counter"),
+        opponentCounter: document.getElementById("opponent-counter"),
+        guessForm: document.getElementById("guess-form"),
+        guessInput: document.getElementById("guess-input"),
+        gameGrid: document.getElementById("game-grid"),
+        waitingOpponent: document.getElementById("waiting-opponent"),
+        finishMessage: document.getElementById("finish-message"),
+        resultMessage: document.getElementById("result-message"),
+        resultDetails: document.getElementById("result-details"),
+        rematchBtn: document.getElementById("rematch-btn"),
+        modal: document.getElementById("modal"),
+        modalTitle: document.getElementById("modal-title"),
+        modalMessage: document.getElementById("modal-message"),
+      };
+
+      function showScreen(screenName) {
+        Object.values(screens).forEach((s) => s.classList.remove("active"));
+        screens[screenName].classList.add("active");
+      }
+
+      function showModal(title, message, duration = 3000) {
+        elements.modalTitle.textContent = title;
+        elements.modalMessage.textContent = message;
+        elements.modal.classList.add("active");
+        setTimeout(() => elements.modal.classList.remove("active"), duration);
+      }
+
+      function createGrid() {
+        elements.gameGrid.innerHTML = "";
+        for (let i = 0; i < maxGuesses; i++) {
+          const row = document.createElement("div");
+          row.className = "grid-row";
+          for (let j = 0; j < wordLength; j++) {
+            const cell = document.createElement("div");
+            cell.className = "grid-cell";
+            cell.id = `cell-${i}-${j}`;
+            row.appendChild(cell);
+          }
+          elements.gameGrid.appendChild(row);
+        }
+      }
+
+      function animateGuess(row, guess, feedback) {
+        feedback.forEach((state, i) => {
+          setTimeout(() => {
+            const cell = document.getElementById(`cell-${row}-${i}`);
+            if (!cell) return;
+
+            cell.textContent = guess[i];
+            cell.classList.add("flip");
+
+            setTimeout(() => {
+              if (state === "correct") cell.classList.add("cell-correct");
+              else if (state === "present") cell.classList.add("cell-present");
+              else cell.classList.add("cell-absent");
+            }, 300);
+          }, i * 150);
+        });
+
+        return new Promise((resolve) => {
+          setTimeout(resolve, feedback.length * 150 + 600);
+        });
+      }
+
+      function startTimer(duration) {
+        const endTime = Date.now() + duration * 1000;
+
+        timerInterval = setInterval(() => {
+          const remaining = Math.max(0, endTime - Date.now());
+          const seconds = Math.floor(remaining / 1000);
+          const minutes = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+
+          elements.timerDisplay.textContent = `${minutes}:${secs
+            .toString()
+            .padStart(2, "0")}`;
+
+          if (remaining === 0) clearInterval(timerInterval);
+        }, 100);
+      }
+
+      function resetGameState() {
+        gameActive = false;
+        currentRow = 0;
+        isFinished = false;
+        if (timerInterval) clearInterval(timerInterval);
+        elements.guessForm.style.display = "block";
+        elements.waitingOpponent.style.display = "none";
+        elements.guessInput.value = "";
+      }
+
+      // Socket event handlers
+      socket.on("client_info", (data) => {
+        clientId = data.client_id;
+        elements.clientIdDisplay.textContent = clientId;
+        elements.serverStatus.textContent = data.server_connected
+          ? "🟢 Connected"
+          : "🔴 Disconnected";
+        console.log("[CLIENT INFO]", data);
+      });
+
+      socket.on("error", (data) => {
+        showModal("❌ Error", data.message, 2000);
+      });
+
+      elements.createRoomBtn.addEventListener("click", () => {
+        socket.emit("create_room");
+      });
+
+      socket.on("room_created", (data) => {
+        elements.displayRoomCode.textContent = data.room_code;
+        elements.waitingMessage.textContent = "Waiting for second player...";
+        elements.startGameBtn.style.display = "none";
+        showScreen("waiting");
+      });
+
+      elements.joinRoomBtn.addEventListener("click", () => {
+        const code = elements.roomCodeInput.value.trim().toUpperCase();
+        if (code.length === 5) {
+          socket.emit("join_room", { room_code: code });
+        } else {
+          showModal("⚠️ Invalid", "Enter 5-digit room code", 2000);
+        }
+      });
+
+      socket.on("room_ready", (data) => {
+        elements.waitingMessage.textContent = data.message;
+        elements.startGameBtn.style.display = "block";
+      });
+
+      elements.startGameBtn.addEventListener("click", () => {
+        socket.emit("start_game");
+      });
+
+      socket.on("game_started", (data) => {
+        resetGameState();
+        maxGuesses = data.max_guesses;
+        wordLength = data.word_length;
+        gameActive = true;
+
+        elements.guessInput.maxLength = wordLength;
+        createGrid();
+        startTimer(data.duration);
+        showScreen("game");
+        elements.guessInput.focus();
+      });
+
+      elements.guessForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        if (!gameActive || isFinished) return;
+
+        const guess = elements.guessInput.value.toUpperCase().trim();
+
+        if (guess.length !== wordLength) {
+          showModal("⚠️ Invalid", `Guess must be ${wordLength} letters!`, 2000);
+          return;
+        }
+
+        socket.emit("make_guess", { guess: guess });
+        elements.guessInput.value = "";
+      });
+
+      socket.on("guess_result", async (data) => {
+        await animateGuess(currentRow, data.guess, data.feedback);
+        currentRow++;
+        elements.guessCounter.textContent = `${data.guess_count}/${maxGuesses}`;
+      });
+
+      socket.on("opponent_guessed", (data) => {
+        elements.opponentCounter.textContent = `${data.guess_count}/${maxGuesses}`;
+      });
+
+      socket.on("player_finished", (data) => {
+        isFinished = true;
+        gameActive = false;
+        elements.guessForm.style.display = "none";
+        elements.waitingOpponent.style.display = "block";
+
+        if (data.result === "won") {
+          elements.finishMessage.textContent = `✅ ${data.message}`;
+        } else {
+          elements.finishMessage.textContent = `❌ ${data.message}`;
+        }
+      });
+
+      socket.on("game_over", (data) => {
+        if (timerInterval) clearInterval(timerInterval);
+        gameActive = false;
+
+        elements.resultMessage.textContent = data.result;
+        elements.resultDetails.textContent = `The word was: ${data.word}`;
+
+        showScreen("result");
+      });
+
+      socket.on("opponent_disconnected", (data) => {
+        if (timerInterval) clearInterval(timerInterval);
+        gameActive = false;
+        showModal("🎉 You Win!", data.message, 5000);
+
+        setTimeout(() => {
+          elements.resultMessage.textContent = data.message;
+          elements.resultDetails.textContent = "Your opponent left the game.";
+          showScreen("result");
+        }, 5000);
+      });
+
+      elements.rematchBtn.addEventListener("click", () => {
+        socket.emit("rematch");
+      });
+
+      socket.on("rematch_ready", (data) => {
+        resetGameState();
+        elements.waitingMessage.textContent = data.message;
+        elements.startGameBtn.style.display = "block";
+        showScreen("waiting");
+      });
+    </script>
+  </body>
+</html>
